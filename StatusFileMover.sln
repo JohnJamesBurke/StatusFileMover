@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.31019.35
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{F184B08F-C81C-45F6-A57F-5ABD9991F28F}") = "StatusFileMover", "StatusFileMover.vbproj", "{D0CAB811-D602-4CC1-9738-0BAF8C40ECEE}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D0CAB811-D602-4CC1-9738-0BAF8C40ECEE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D0CAB811-D602-4CC1-9738-0BAF8C40ECEE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D0CAB811-D602-4CC1-9738-0BAF8C40ECEE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D0CAB811-D602-4CC1-9738-0BAF8C40ECEE}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {9C0D9BCE-A10A-4459-8D4C-3D6216D3C317}
+	EndGlobalSection
+EndGlobal
