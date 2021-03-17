@@ -3,6 +3,8 @@ Option Explicit On
 
 Imports System.IO
 Imports System.Configuration
+Imports System.Xml
+
 Public Class StatusFileMover
 
     Private mstrStatusUpdateFileFolder As String = ""
@@ -12,6 +14,8 @@ Public Class StatusFileMover
     Private mstrDataFreightFileFolder As String = ""
     Private mstrDataFreightFileSuccessFolder As String = ""
     Private mstrDataFreightFileFailureFolder As String = ""
+
+    Private mstrEventLogSource As String
 
     Private mblnServiceStartedSuccessfully As Boolean = True
 
@@ -44,6 +48,8 @@ Public Class StatusFileMover
             mstrDataFreightFileFolder = ConfigurationManager.AppSettings.Get("DataFreightFileFolder")
             mstrDataFreightFileSuccessFolder = ConfigurationManager.AppSettings.Get("DataFreightSuccessFolder")
             mstrDataFreightFileFailureFolder = ConfigurationManager.AppSettings.Get("DataFreightFailureFolder")
+
+            mstrEventLogSource = ConfigurationManager.AppSettings.Get("EventLogSource")
 
             ' If any of the above are blank or empty then the service cannot function correctly
             If mstrStatusUpdateFileFolder.Trim = "" Or mstrStatusUpdateFileSuccessFolder.Trim = "" Or mstrStatusUpdateFileFailureFolder.Trim = "" Or
@@ -88,7 +94,7 @@ Public Class StatusFileMover
 
         ' Tell the event log we are stopping
         Dim myLog As New EventLog()
-        myLog.Source = "CareBackupCleaner"
+        myLog.Source = "StatusUpdateFileMover"
         myLog.WriteEntry("Status Update File Mover Log", "Service Stopped on  " &
                                     Date.Today.ToShortDateString & " " &
                                     CStr(TimeOfDay),
@@ -119,12 +125,18 @@ Public Class StatusFileMover
             ' Look at the status file folder for xml files.
             Dim fiArr As FileInfo() = di.GetFiles("*.xml")
 
+            'Dim testfile As System.IO.StreamWriter
+            'testfile = My.Computer.FileSystem.OpenTextFileWriter("C:\Temp\Event.log", True)
+
+
             Dim fri As FileInfo
             For Each fri In fiArr
 
 
                 ' if a file exists then copy it to the data freight file folder
                 System.IO.File.Copy(fri.FullName, Path.Combine(mstrDataFreightFileFolder, fri.Name), True)
+
+
 
 
                 ' Event log - File copied to Data Freight folder
@@ -161,7 +173,139 @@ Public Class StatusFileMover
                         folderName = mstrDataFreightFileFailureFolder
                         newFolderName = mstrStatusUpdateFileFailureFolder
                     Else
+
                         ' It must be in the success folder. Log this.
+                        folderName = mstrDataFreightFileSuccessFolder
+                        newFolderName = mstrStatusUpdateFileSuccessFolder
+
+
+
+                        ' The event log should be updated here
+
+                        ' Poll the event log for an match of the file and grab the AIM ref from the log?
+                        Dim strEventTitle As String = mstrEventLogSource  ' Pick this up from Config
+                        Dim log As EventLog = New EventLog(strEventTitle)
+
+
+                        Dim blnTestOnlyOnce As Boolean = True
+                        For counter As Integer = 1 To 100
+
+
+                            Dim msg As String = log.Entries(log.Entries.Count - counter).Message
+
+                            If Strings.Left(msg, 12) <> "Notification" Then
+
+
+                                Dim pos2 As Integer = InStr(msg.ToUpper, fri.Name.ToUpper)
+                                'testfile.WriteLine(fri.Name.ToUpper & " - " & msg.ToUpper & vbCrLf & pos2 & vbCrLf & vbCrLf)
+
+                                If InStr(msg.ToUpper, fri.Name.ToUpper) > 0 Then
+                                    ' The file name that was imported is contained in the event viewer message
+                                    ' We need to now parse this message for the Aim reference.
+
+                                    ' Name exists in msg
+                                    myLog.Source = "StatusUpdateFileMover"
+                                    myLog.WriteEntry("Status Update File Mover Log", "File name " & fri.Name & " found in log " & " on " &
+                                                                        Date.Today.ToShortDateString & " " &
+                                                                        CStr(TimeOfDay),
+                                                                        EventLogEntryType.Information)
+
+
+                                    'Job | Shipment | Agent Ref: 'AIM117576 | AIM117576-1 | EPOSATGB202100000008' updated. Container Count: 1
+                                    Dim pos As Integer = InStr(msg.ToUpper, "JOB | SHIP")
+                                    'testfile.WriteLine("Pos: " & pos.ToString & vbCrLf)
+                                    If pos > 0 Then
+
+                                        msg = Strings.Mid(msg, pos, Len(msg))
+                                        'testfile.WriteLine("msg: " & msg & vbCrLf)
+                                        pos = InStr(msg.ToUpper, "FILE '")
+                                        'msg = Strings.Mid(msg, pos, Len(msg))
+                                        'testfile.WriteLine("pos: " & pos.ToString & vbCrLf)
+
+                                        If pos > 0 Then
+                                            msg = Strings.Left(msg, pos - 1)
+                                            'testfile.WriteLine("msg: " & msg & vbCrLf)
+
+                                            Dim msgParts() As String = Split(msg, "|")
+
+                                            Dim aimReference As String = ""
+                                            Dim eci As String = ""
+                                            If msgParts.Length >= 4 Then
+                                                aimReference = msgParts(3).Trim
+
+                                                If msgParts.Length >= 5 Then
+                                                    '156800054' updated. Container Count: 2
+                                                    pos = InStr(msgParts(4), "'")
+                                                    If pos > 0 Then
+                                                        eci = Strings.Left(msgParts(4), pos - 1)
+                                                    End If
+                                                End If
+                                            End If
+
+                                            'testfile.WriteLine("Aim: " & aimReference & vbCrLf)
+                                            'testfile.WriteLine("eci: " & eci & vbCrLf)
+
+
+                                            ' Write out the xml file to the success folder
+                                            ' If we get a match then we can create an xml file with the AIM Ref?
+                                            ' <StatusUpdate>
+                                            '   <CATTS_File>StatusUpdateCA_123456.xml</CATTS_File>
+                                            '   <AIMReference>AIM123456-1</AimReference>
+                                            '   <ECI>121212121</ECI>
+                                            ' </StatusUpdate>
+
+                                            ' Save this to the folder.
+                                            Dim strFileName As String = Path.Combine(newFolderName, eci & ".xml")
+
+                                            myLog.Source = "StatusUpdateFileMover"
+                                            myLog.WriteEntry("Status Update File Mover Log", "Creating AIM Ref File: " & strFileName & " on " &
+                                                                Date.Today.ToShortDateString & " " &
+                                                                CStr(TimeOfDay),
+                                                                EventLogEntryType.Information)
+
+
+                                            ' Now write the data out based on the class.
+                                            Dim settings As XmlWriterSettings = New XmlWriterSettings()
+                                            settings.Indent = True
+
+                                            ' Create XmlWriter.
+                                            Using writer As XmlWriter = XmlWriter.Create(strFileName, settings)
+
+                                                ' Begin writing.
+                                                writer.WriteStartDocument()
+
+                                                ' Write root element
+                                                writer.WriteStartElement("StatusUpdate") ' This may not be needed
+
+
+                                                ' Catts_File
+                                                writer.WriteElementString("CATTS_File", fri.Name.ToString) ' Original message (outbound)?
+                                                writer.WriteElementString("AIMReference", aimReference)
+                                                writer.WriteElementString("ECI", eci)
+
+
+                                                ' End Root element
+                                                writer.WriteEndElement()
+
+
+                                                ' End Document
+                                                writer.WriteEndDocument()
+                                            End Using
+
+                                        End If
+
+                                    End If
+
+                                    ' Exit the loop
+                                    Exit For
+
+                                End If
+
+                            End If
+                        Next
+
+
+
                         folderName = mstrDataFreightFileSuccessFolder
                         newFolderName = mstrStatusUpdateFileSuccessFolder
                     End If
@@ -203,6 +347,8 @@ Public Class StatusFileMover
                 End If
 
             Next fri
+
+            'testfile.Close()
 
             ' Restart the timer?
             Dim tsInterval As TimeSpan = New TimeSpan(0, 0, 5)
